@@ -11,10 +11,15 @@ _SSH_LINE = re.compile(
     r"^(?P<mon>[A-Z][a-z]{2})\s+(?P<day>\d{1,2})\s+(?P<time>\d{2}:\d{2}:\d{2})"
     r"\s+\S+\s+sshd\[\d+\]:\s+(?P<msg>.*)$"
 )
+# the username is whatever sits before " from <ip> port": it may be empty or
+# contain spaces, since attackers send arbitrary strings
 _FAILED = re.compile(
-    r"Failed (?:password|publickey) for (?P<invalid>invalid user )?(?P<user>\S+)"
+    r"Failed (?:password|publickey) for (?P<invalid>invalid user )?(?P<user>.*?)"
     r" from (?P<ip>[0-9a-fA-F:.]+) port \d+"
 )
+# syslog collapses identical lines: "message repeated 5 times: [ Failed password ...]"
+# means the message occurred 5 more times
+_REPEATED = re.compile(r"^message repeated (?P<n>\d+) times: \[\s*(?P<msg>.*?)\s*\]$")
 _ACCEPTED = re.compile(
     r"Accepted (?:password|publickey) for (?P<user>\S+)"
     r" from (?P<ip>[0-9a-fA-F:.]+) port \d+"
@@ -55,6 +60,7 @@ def parse_auth_log(lines: Iterable[str], year: Optional[int] = None,
 
     Only "Failed ..." and "Accepted ..." lines are used. The separate
     "Invalid user ..." lines are ignored so one attempt is not counted twice.
+    "message repeated N times: [ ... ]" lines count as N more attempts.
     Lines whose date does not exist in their year (Feb 29) are skipped.
     """
     # pass 1: timestamps in the placeholder year, plus a rollover offset per line
@@ -74,15 +80,18 @@ def parse_auth_log(lines: Iterable[str], year: Optional[int] = None,
         if prev is not None and prev - ts > _NEW_YEAR_JUMP:
             offset += 1
         prev = ts
-        msg = match["msg"]
+        msg, times = match["msg"], 1
+        repeated = _REPEATED.match(msg)
+        if repeated:
+            msg, times = repeated["msg"], int(repeated["n"])
         failed = _FAILED.search(msg)
         if failed:
-            records.append((offset, ts, "failure", failed["user"], failed["ip"],
-                            failed["invalid"] is None))
+            records += [(offset, ts, "failure", failed["user"].strip(), failed["ip"],
+                         failed["invalid"] is None)] * times
             continue
         accepted = _ACCEPTED.search(msg)
         if accepted:
-            records.append((offset, ts, "success", accepted["user"], accepted["ip"], True))
+            records += [(offset, ts, "success", accepted["user"], accepted["ip"], True)] * times
 
     if not records:
         return []
