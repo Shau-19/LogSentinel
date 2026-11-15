@@ -42,7 +42,7 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 # 3. install the test dependency
 pip install -r requirements-dev.txt
 
-# 4. run the tests (should show 31 passed)
+# 4. run the tests (should show 33 passed)
 python -m pytest -q
 
 # 5. run the tool on the bundled sample logs
