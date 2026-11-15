@@ -6,6 +6,8 @@ A small Python tool that reads SSH (`auth.log`) and Windows logon events, detect
 
 Runs fully offline: no network calls and no external dependencies at runtime (standard library only), so it can be used on isolated or air-gapped machines.
 
+![LogSentinel analyzing the bundled sample logs: 10 findings from CRITICAL to LOW](docs/screenshot.png)
+
 ## How it works
 
 ```mermaid
